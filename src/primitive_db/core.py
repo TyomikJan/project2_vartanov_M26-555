@@ -48,3 +48,77 @@ def list_tables(metadata):
         print("Таблиц нет.")
     for name in metadata:
         print(f"- {name}")
+
+
+def _schema(metadata, table_name):
+    return dict(c.split(":") for c in metadata[table_name]["columns"])
+
+
+def _check_type(value, col_type):
+    if col_type == "int":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if col_type == "bool":
+        return isinstance(value, bool)
+    return isinstance(value, str)
+
+
+def validate_clause(metadata, table_name, clause):
+    """Check column names and value types of a where/set clause."""
+    schema = _schema(metadata, table_name)
+    for column, value in clause.items():
+        if column not in schema:
+            print(f"Ошибка: Столбец {column} не существует.")
+            return False
+        if not _check_type(value, schema[column]):
+            col_type = schema[column]
+            print(f"Ошибка: Значение {value!r} не подходит для {column}:{col_type}.")
+            return False
+    return True
+
+
+def insert(metadata, table_name, values, table_data):
+    """Append a record; returns (table_data, new_id) or None on error."""
+    if table_name not in metadata:
+        print(f'Ошибка: Таблица "{table_name}" не существует.')
+        return None
+    columns = [c.split(":") for c in metadata[table_name]["columns"]][1:]
+    if len(values) != len(columns):
+        print(f"Ошибка: ожидается {len(columns)} значений, получено {len(values)}.")
+        return None
+    for (name, col_type), value in zip(columns, values):
+        if not _check_type(value, col_type):
+            print(f"Ошибка: Значение {value!r} не подходит для {name}:{col_type}.")
+            return None
+    new_id = max((r["ID"] for r in table_data), default=0) + 1
+    record = {"ID": new_id}
+    record.update({name: v for (name, _), v in zip(columns, values)})
+    return [*table_data, record], new_id
+
+
+def _matches(record, where_clause):
+    return all(record.get(k) == v for k, v in where_clause.items())
+
+
+def select(table_data, where_clause=None):
+    """Return all records, or only those matching where_clause."""
+    if not where_clause:
+        return table_data
+    return [r for r in table_data if _matches(r, where_clause)]
+
+
+def update(table_data, set_clause, where_clause):
+    """Returns (new_data, ids_of_changed_records)."""
+    ids = []
+    result = []
+    for r in table_data:
+        if _matches(r, where_clause):
+            r = {**r, **set_clause}
+            ids.append(r["ID"])
+        result.append(r)
+    return result, ids
+
+
+def delete(table_data, where_clause):
+    """Returns (new_data, ids_of_deleted_records)."""
+    ids = [r["ID"] for r in table_data if _matches(r, where_clause)]
+    return [r for r in table_data if not _matches(r, where_clause)], ids
