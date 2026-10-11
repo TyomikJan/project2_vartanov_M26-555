@@ -21,7 +21,7 @@
 ## Установка
 
 ```bash
-git clone <адрес-репозитория>
+git clone https://github.com/TyomikJan/project2_vartanov_M26-555.git
 cd project2_vartanov_M26-555
 uv sync
 ```
