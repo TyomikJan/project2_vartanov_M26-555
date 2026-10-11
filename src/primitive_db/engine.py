@@ -4,6 +4,7 @@ import shlex
 import prompt
 from prettytable import PrettyTable
 
+from .constants import ID_COLUMN, META_FILE
 from .core import (
     create_table,
     delete,
@@ -14,6 +15,7 @@ from .core import (
     update,
     validate_clause,
 )
+from .decorators import create_cacher, handle_db_errors
 from .parser import parse_clause, parse_values
 from .utils import (
     delete_table_data,
@@ -23,7 +25,7 @@ from .utils import (
     save_table_data,
 )
 
-META_FILE = "db_meta.json"
+cache_result = create_cacher()
 
 
 def print_help():
@@ -93,7 +95,8 @@ def handle_select(metadata, name, raw_where):
     where = parse_clause(raw_where) if raw_where else None
     if where and not validate_clause(metadata, name, where):
         return
-    rows = select(load_table_data(name), where)
+    key = (name, tuple(sorted(where.items())) if where else None)
+    rows = cache_result(key, lambda: select(load_table_data(name), where))
     columns = [c.split(":")[0] for c in metadata[name]["columns"]]
     table = PrettyTable(columns)
     for row in rows:
@@ -103,7 +106,7 @@ def handle_select(metadata, name, raw_where):
 
 def handle_update(metadata, name, raw_set, raw_where):
     set_clause, where = parse_clause(raw_set), parse_clause(raw_where)
-    if "ID" in set_clause:
+    if ID_COLUMN in set_clause:
         print("Ошибка: ID изменять нельзя.")
         return
     if not (
@@ -124,7 +127,10 @@ def handle_delete(metadata, name, raw_where):
     where = parse_clause(raw_where)
     if not validate_clause(metadata, name, where):
         return
-    data, ids = delete(load_table_data(name), where)
+    result = delete(load_table_data(name), where)
+    if result is None:
+        return
+    data, ids = result
     if not ids:
         print("Записи не найдены.")
         return
@@ -148,6 +154,10 @@ DATA_HANDLERS = {
 }
 
 
+WRITE_COMMANDS = {"insert", "update", "delete"}
+
+
+@handle_db_errors
 def handle_data_command(metadata, command, text):
     """Run insert/select/update/delete/info."""
     match = PATTERNS[command].match(text)
@@ -157,10 +167,9 @@ def handle_data_command(metadata, command, text):
     name = match[1]
     if not table_exists(metadata, name):
         return
-    try:
-        DATA_HANDLERS[command](metadata, name, *match.groups()[1:])
-    except ValueError as error:  # ошибка разбора значений
-        print(error)
+    DATA_HANDLERS[command](metadata, name, *match.groups()[1:])
+    if command in WRITE_COMMANDS:
+        cache_result.clear()
 
 
 def handle_table_command(metadata, command, params, text):
@@ -176,6 +185,7 @@ def handle_table_command(metadata, command, params, text):
         if result is not None:
             save_metadata(META_FILE, result)
             delete_table_data(params[0])
+            cache_result.clear()
     else:
         bad_input(text)
 

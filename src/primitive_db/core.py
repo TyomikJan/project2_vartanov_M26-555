@@ -1,6 +1,8 @@
-VALID_TYPES = {"int", "str", "bool"}
+from .constants import ID_COLUMN, ID_TYPE, VALID_TYPES
+from .decorators import confirm_action, handle_db_errors, log_time
 
 
+@handle_db_errors
 def create_table(metadata, table_name, columns):
     """Create a table; ID:int is prepended automatically.
 
@@ -16,7 +18,7 @@ def create_table(metadata, table_name, columns):
         if not sep or not name or col_type not in VALID_TYPES:
             print(f"Некорректное значение: {column}. Попробуйте снова.")
             return None
-        if name == "ID":
+        if name == ID_COLUMN:
             continue  # ID создается автоматом
         parsed.append((name, col_type))
 
@@ -25,13 +27,15 @@ def create_table(metadata, table_name, columns):
         print("Некорректное значение: повторяющиеся столбцы. Попробуйте снова.")
         return None
 
-    all_columns = [("ID", "int"), *parsed]
+    all_columns = [(ID_COLUMN, ID_TYPE), *parsed]
     metadata[table_name] = {"columns": [f"{n}:{t}" for n, t in all_columns]}
     shown = ", ".join(f"{n}:{t}" for n, t in all_columns)
     print(f'Таблица "{table_name}" успешно создана со столбцами: {shown}')
     return metadata
 
 
+@handle_db_errors
+@confirm_action("удаление таблицы")
 def drop_table(metadata, table_name):
     """Drop a table. Returns updated metadata, or None on error."""
     if table_name not in metadata:
@@ -42,6 +46,7 @@ def drop_table(metadata, table_name):
     return metadata
 
 
+@handle_db_errors
 def list_tables(metadata):
     """Print all table names."""
     if not metadata:
@@ -62,6 +67,7 @@ def _check_type(value, col_type):
     return isinstance(value, str)
 
 
+@handle_db_errors
 def validate_clause(metadata, table_name, clause):
     """Check column names and value types of a where/set clause."""
     schema = _schema(metadata, table_name)
@@ -76,6 +82,8 @@ def validate_clause(metadata, table_name, clause):
     return True
 
 
+@handle_db_errors
+@log_time
 def insert(metadata, table_name, values, table_data):
     """Append a record; returns (table_data, new_id) or None on error."""
     if table_name not in metadata:
@@ -89,8 +97,8 @@ def insert(metadata, table_name, values, table_data):
         if not _check_type(value, col_type):
             print(f"Ошибка: Значение {value!r} не подходит для {name}:{col_type}.")
             return None
-    new_id = max((r["ID"] for r in table_data), default=0) + 1
-    record = {"ID": new_id}
+    new_id = max((r[ID_COLUMN] for r in table_data), default=0) + 1
+    record = {ID_COLUMN: new_id}
     record.update({name: v for (name, _), v in zip(columns, values)})
     return [*table_data, record], new_id
 
@@ -99,6 +107,8 @@ def _matches(record, where_clause):
     return all(record.get(k) == v for k, v in where_clause.items())
 
 
+@handle_db_errors
+@log_time
 def select(table_data, where_clause=None):
     """Return all records, or only those matching where_clause."""
     if not where_clause:
@@ -106,6 +116,7 @@ def select(table_data, where_clause=None):
     return [r for r in table_data if _matches(r, where_clause)]
 
 
+@handle_db_errors
 def update(table_data, set_clause, where_clause):
     """Returns (new_data, ids_of_changed_records)."""
     ids = []
@@ -113,12 +124,14 @@ def update(table_data, set_clause, where_clause):
     for r in table_data:
         if _matches(r, where_clause):
             r = {**r, **set_clause}
-            ids.append(r["ID"])
+            ids.append(r[ID_COLUMN])
         result.append(r)
     return result, ids
 
 
+@handle_db_errors
+@confirm_action("удаление записи")
 def delete(table_data, where_clause):
     """Returns (new_data, ids_of_deleted_records)."""
-    ids = [r["ID"] for r in table_data if _matches(r, where_clause)]
+    ids = [r[ID_COLUMN] for r in table_data if _matches(r, where_clause)]
     return [r for r in table_data if not _matches(r, where_clause)], ids
