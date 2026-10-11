@@ -1,15 +1,17 @@
 import re
 
+from .constants import FALSE_LITERAL, QUOTE_CHARS, TRUE_LITERAL
+
 _TOKEN = re.compile(r'"[^"]*"|\'[^\']*\'|[^,\s][^,]*?(?=\s*(?:,|$))')
 
 
 def parse_value(raw):
     """Convert a literal into int/bool/str. Strings must be quoted."""
     raw = raw.strip()
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in QUOTE_CHARS:
         return raw[1:-1]
-    if raw.lower() in ("true", "false"):
-        return raw.lower() == "true"
+    if raw.lower() in (TRUE_LITERAL, FALSE_LITERAL):
+        return raw.lower() == TRUE_LITERAL
     if re.fullmatch(r"-?\d+", raw):
         return int(raw)
     raise ValueError(f"Некорректное значение: {raw}. Строки должны быть в кавычках.")
@@ -23,7 +25,7 @@ def split_commas(text):
             if ch == quote:
                 quote = None
             buf += ch
-        elif ch in "\"'":
+        elif ch in QUOTE_CHARS:
             quote = ch
             buf += ch
         elif ch == ",":

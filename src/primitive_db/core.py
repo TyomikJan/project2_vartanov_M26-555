@@ -1,4 +1,4 @@
-from .constants import ID_COLUMN, ID_TYPE, VALID_TYPES
+from .constants import BOOL_TYPE, ID_COLUMN, INT_TYPE, VALID_TYPES
 from .decorators import confirm_action, handle_db_errors, log_time
 
 
@@ -27,7 +27,7 @@ def create_table(metadata, table_name, columns):
         print("Некорректное значение: повторяющиеся столбцы. Попробуйте снова.")
         return None
 
-    all_columns = [(ID_COLUMN, ID_TYPE), *parsed]
+    all_columns = [(ID_COLUMN, INT_TYPE), *parsed]
     metadata[table_name] = {"columns": [f"{n}:{t}" for n, t in all_columns]}
     shown = ", ".join(f"{n}:{t}" for n, t in all_columns)
     print(f'Таблица "{table_name}" успешно создана со столбцами: {shown}')
@@ -56,13 +56,15 @@ def list_tables(metadata):
 
 
 def _schema(metadata, table_name):
+    """Return {column: type} for a table."""
     return dict(c.split(":") for c in metadata[table_name]["columns"])
 
 
 def _check_type(value, col_type):
-    if col_type == "int":
+    """Check that value matches the column type."""
+    if col_type == INT_TYPE:
         return isinstance(value, int) and not isinstance(value, bool)
-    if col_type == "bool":
+    if col_type == BOOL_TYPE:
         return isinstance(value, bool)
     return isinstance(value, str)
 

@@ -1,7 +1,7 @@
 import json
 import os
 
-from .constants import DATA_DIR
+from .constants import DATA_DIR, DATA_FILE_TEMPLATE
 
 
 def load_metadata(filepath):
@@ -19,10 +19,15 @@ def save_metadata(filepath, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _data_path(table_name):
+    """Return the path of the table data file."""
+    return DATA_FILE_TEMPLATE.format(dir=DATA_DIR, table=table_name)
+
+
 def load_table_data(table_name):
     """Load table rows from data/<table_name>.json; return [] if missing."""
     try:
-        with open(f"{DATA_DIR}/{table_name}.json", encoding="utf-8") as f:
+        with open(_data_path(table_name), encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return []
@@ -31,13 +36,13 @@ def load_table_data(table_name):
 def save_table_data(table_name, data):
     """Save table rows to data/<table_name>.json."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(f"{DATA_DIR}/{table_name}.json", "w", encoding="utf-8") as f:
+    with open(_data_path(table_name), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def delete_table_data(table_name):
     """Remove the data file of a table, if any."""
     try:
-        os.remove(f"{DATA_DIR}/{table_name}.json")
+        os.remove(_data_path(table_name))
     except FileNotFoundError:
         pass

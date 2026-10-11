@@ -4,7 +4,16 @@ import shlex
 import prompt
 from prettytable import PrettyTable
 
-from .constants import ID_COLUMN, META_FILE
+from .constants import (
+    CMD_CREATE_TABLE,
+    CMD_DROP_TABLE,
+    CMD_EXIT,
+    CMD_HELP,
+    CMD_LIST_TABLES,
+    ID_COLUMN,
+    META_FILE,
+    TABLE_COMMANDS,
+)
 from .core import (
     create_table,
     delete,
@@ -73,10 +82,12 @@ PATTERNS = {
 
 
 def bad_input(text):
+    """Report an invalid input value."""
     print(f"Некорректное значение: {text}. Попробуйте снова.")
 
 
 def table_exists(metadata, name):
+    """Return True if the table exists, else print an error."""
     if name not in metadata:
         print(f'Ошибка: Таблица "{name}" не существует.')
         return False
@@ -84,6 +95,7 @@ def table_exists(metadata, name):
 
 
 def handle_insert(metadata, name, raw_values):
+    """Parse and run the insert command."""
     result = insert(metadata, name, parse_values(raw_values), load_table_data(name))
     if result:
         data, new_id = result
@@ -92,6 +104,7 @@ def handle_insert(metadata, name, raw_values):
 
 
 def handle_select(metadata, name, raw_where):
+    """Parse, run (with caching) and print the select command."""
     where = parse_clause(raw_where) if raw_where else None
     if where and not validate_clause(metadata, name, where):
         return
@@ -105,6 +118,7 @@ def handle_select(metadata, name, raw_where):
 
 
 def handle_update(metadata, name, raw_set, raw_where):
+    """Parse and run the update command."""
     set_clause, where = parse_clause(raw_set), parse_clause(raw_where)
     if ID_COLUMN in set_clause:
         print("Ошибка: ID изменять нельзя.")
@@ -124,6 +138,7 @@ def handle_update(metadata, name, raw_set, raw_where):
 
 
 def handle_delete(metadata, name, raw_where):
+    """Parse and run the delete command."""
     where = parse_clause(raw_where)
     if not validate_clause(metadata, name, where):
         return
@@ -140,6 +155,7 @@ def handle_delete(metadata, name, raw_where):
 
 
 def handle_info(metadata, name):
+    """Print table columns and record count."""
     print(f"Таблица: {name}")
     print("Столбцы: " + ", ".join(metadata[name]["columns"]))
     print(f"Количество записей: {len(load_table_data(name))}")
@@ -174,13 +190,13 @@ def handle_data_command(metadata, command, text):
 
 def handle_table_command(metadata, command, params, text):
     """Run create_table/drop_table/list_tables."""
-    if command == "list_tables":
+    if command == CMD_LIST_TABLES:
         list_tables(metadata)
-    elif command == "create_table" and len(params) >= 2:
+    elif command == CMD_CREATE_TABLE and len(params) >= 2:
         result = create_table(metadata, params[0], params[1:])
         if result is not None:
             save_metadata(META_FILE, result)
-    elif command == "drop_table" and len(params) == 1:
+    elif command == CMD_DROP_TABLE and len(params) == 1:
         result = drop_table(metadata, params[0])
         if result is not None:
             save_metadata(META_FILE, result)
@@ -205,13 +221,13 @@ def run():
             continue
 
         command = user_input.split()[0].lower()
-        if command == "exit":
+        if command == CMD_EXIT:
             break
-        elif command == "help":
+        elif command == CMD_HELP:
             print_help()
         elif command in DATA_HANDLERS:
             handle_data_command(metadata, command, user_input)
-        elif command in ("create_table", "drop_table", "list_tables"):
+        elif command in TABLE_COMMANDS:
             try:
                 params = shlex.split(user_input)[1:]
             except ValueError:
